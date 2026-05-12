@@ -12,10 +12,24 @@ This is intentionally small and interview-friendly. It is not full sentence lip 
 - `help`
 - `stop`
 - `water`
+- `food`
+- `medicine`
+- `doctor`
+- `pain`
+- `emergency`
+- `call`
 - `thank_you`
 - `please`
 - `bathroom`
 - `goodbye`
+- `repeat`
+- `slow_down`
+- `more`
+- `finished`
+- `where`
+- `when`
+- `who`
+- `family`
 
 ## Architecture
 

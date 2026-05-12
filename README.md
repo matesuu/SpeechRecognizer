@@ -1,8 +1,6 @@
-# Real-Time Lip Reading Assistant
+# Real-Time Speech-to-Text for Auditory Accessbility
 
 Accessibility-focused visual speech recognition prototype. It uses webcam video, MediaPipe Face Mesh, mouth crops, and a small PyTorch CNN+GRU model to classify isolated spoken words from mouth movement only.
-
-This is intentionally small and interview-friendly. It is not full sentence lip reading, does not use audio, and is not a LipNet clone.
 
 ## Vocabulary
 
@@ -128,21 +126,3 @@ lip_reader.py    real-time webcam inference
 model.py         CNN+GRU PyTorch model
 utils.py         Face Mesh ROI, preprocessing, labels, FPS helpers
 ```
-
-## Limitations
-
-- Isolated word classification only.
-- Small vocabulary.
-- Accuracy depends heavily on your collected data.
-- Single-speaker data may not generalize to other speakers.
-- Similar mouth shapes can be confused, especially without audio.
-- Real-world accessibility use would require more data, testing, and robust UI design.
-
-## Future Improvements
-
-- Larger dataset with more speakers.
-- Sentence-level recognition.
-- CTC loss for unsegmented sequences.
-- Transformer or 3D CNN temporal model.
-- Better augmentation for lighting and camera angle changes.
-- Integration with captions or assistive communication UI.

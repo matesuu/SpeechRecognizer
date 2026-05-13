@@ -83,6 +83,29 @@ def get_label_maps() -> tuple[dict[str, int], dict[int, str]]:
     return LABEL_TO_INDEX.copy(), INDEX_TO_LABEL.copy()
 
 
+def get_face_mesh_solution():
+    """Return MediaPipe's legacy Face Mesh solution module."""
+    try:
+        import mediapipe as mp
+    except ImportError as exc:
+        raise RuntimeError(
+            "MediaPipe failed to import. If this mentions an incompatible "
+            "NumPy architecture, recreate the virtual environment with the "
+            "same Terminal architecture you will use to run the app, then "
+            "run `python3 -m pip install -r requirements.txt`."
+        ) from exc
+
+    try:
+        return mp.solutions.face_mesh
+    except AttributeError as exc:
+        raise RuntimeError(
+            "This project uses the legacy `mp.solutions.face_mesh` API, but "
+            "the installed MediaPipe package does not expose it. Reinstall "
+            "the pinned dependency with `python3 -m pip install --force-reinstall "
+            "-r requirements.txt`."
+        ) from exc
+
+
 def labels_to_maps(labels: list[str]) -> tuple[dict[str, int], dict[int, str]]:
     """Build label maps from a runtime vocabulary."""
     label_to_index = {label: index for index, label in enumerate(labels)}

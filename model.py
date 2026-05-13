@@ -62,10 +62,10 @@ class LipReadingModel(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         batch_size, frames, channels, height, width = x.shape
-        x = x.view(batch_size * frames, channels, height, width)
+        x = x.reshape(batch_size * frames, channels, height, width)
         frame_features = self.frame_encoder(x)
         embeddings = self.embedding(frame_features)
-        embeddings = embeddings.view(batch_size, frames, -1)
+        embeddings = embeddings.reshape(batch_size, frames, -1)
 
         gru_output, _ = self.temporal_model(embeddings)
         final_state = gru_output[:, -1, :]

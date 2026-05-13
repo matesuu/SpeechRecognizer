@@ -37,7 +37,7 @@ class LipClipDataset(Dataset):
         if not self.samples:
             raise RuntimeError(
                 f"No .npy clips found in {self.data_dir}. "
-                "Run collect_data.py first, for example: python collect_data.py --label hello"
+                "Run collect_data.py first, for example: python3 collect_data.py --label hello"
             )
 
     def __len__(self) -> int:
@@ -71,6 +71,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--img_size", type=int, default=96, help="Mouth crop size.")
     parser.add_argument("--val_split", type=float, default=0.2, help="Validation fraction.")
     parser.add_argument(
+        "--device",
+        choices=["auto", "cpu", "cuda", "mps"],
+        default="auto",
+        help="Training device. Auto uses CUDA when available, otherwise CPU. MPS is opt-in.",
+    )
+    parser.add_argument(
         "--labels",
         nargs="*",
         default=None,
@@ -79,11 +85,20 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def get_device() -> torch.device:
+def get_device(preference: str = "auto") -> torch.device:
+    if preference == "cpu":
+        return torch.device("cpu")
+    if preference == "cuda":
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA requested but not available.")
+        return torch.device("cuda")
+    if preference == "mps":
+        if not torch.backends.mps.is_available():
+            raise RuntimeError("MPS requested but not available.")
+        return torch.device("mps")
+
     if torch.cuda.is_available():
         return torch.device("cuda")
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
     return torch.device("cpu")
 
 
@@ -147,8 +162,10 @@ def main() -> None:
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False)
 
-    device = get_device()
+    device = get_device(args.device)
     print(f"Device: {device}")
+    if torch.backends.mps.is_available() and device.type == "cpu":
+        print("MPS available but CPU selected for training stability with GRU backward.")
     print(f"Samples: train={len(train_dataset)}, val={len(val_dataset)}")
 
     model = LipReadingModel(num_classes=len(labels), img_size=args.img_size).to(device)

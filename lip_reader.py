@@ -10,7 +10,6 @@ from pathlib import Path
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
 
 import cv2
-import mediapipe as mp
 import numpy as np
 import torch
 
@@ -21,6 +20,7 @@ from utils import (
     VOCABULARY,
     crop_and_resize_mouth,
     extract_mouth_bbox,
+    get_face_mesh_solution,
     most_common_prediction,
     normalize_clip,
     open_camera,
@@ -85,6 +85,11 @@ def main() -> None:
         img_size = checkpoint_img_size
         print(f"Loaded model from {args.checkpoint} on {device}")
 
+    try:
+        mp_face_mesh = get_face_mesh_solution()
+    except RuntimeError as exc:
+        raise SystemExit(f"Error: {exc}") from None
+
     if not check_camera_permissions(args.camera_id):
         return
 
@@ -92,7 +97,6 @@ def main() -> None:
     if active_camera_id != args.camera_id:
         print(f"Camera id {args.camera_id} opened but returned no frames. Using camera id {active_camera_id}.")
 
-    mp_face_mesh = mp.solutions.face_mesh
     frame_buffer: deque[np.ndarray] = deque(maxlen=frames_per_clip)
     prediction_buffer: deque[tuple[int, float]] = deque(maxlen=args.smooth_window)
     fps_counter = FPSCounter()

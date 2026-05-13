@@ -41,10 +41,21 @@ The model treats lip reading as a temporal computer vision task. One mouth image
 
 ```bash
 cd lip-reading-assistant
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+python3 -m pip install -r requirements.txt
 ```
+
+Apple Silicon note: create, install, and run from the same Terminal mode. Prefer native arm64:
+
+```bash
+arch -arm64 python3 -m venv .venv
+source .venv/bin/activate
+arch -arm64 python3 -m pip install -r requirements.txt
+arch -arm64 python3 train.py --data_dir data/raw --epochs 15 --batch_size 8 --lr 0.001 --frames_per_clip 30 --img_size 96
+```
+
+Do not mix Rosetta and native arm64 shells in one `.venv`, or compiled packages like NumPy can fail to import.
 
 On Windows:
 
@@ -57,9 +68,9 @@ On Windows:
 Record fixed-length mouth clips for each word:
 
 ```bash
-python collect_data.py --label hello --num_samples 30 --frames_per_clip 30
-python collect_data.py --label yes --num_samples 30 --frames_per_clip 30
-python collect_data.py --label no --num_samples 30 --frames_per_clip 30
+python3 collect_data.py --label hello --num_samples 30 --frames_per_clip 30
+python3 collect_data.py --label yes --num_samples 30 --frames_per_clip 30
+python3 collect_data.py --label no --num_samples 30 --frames_per_clip 30
 ```
 
 Controls:
@@ -83,10 +94,10 @@ Suggested recording plan:
 ## Train
 
 ```bash
-python train.py --data_dir data/raw --epochs 15 --batch_size 8 --lr 0.001 --frames_per_clip 30 --img_size 96
+python3 train.py --data_dir data/raw --epochs 15 --batch_size 8 --lr 0.001 --frames_per_clip 30 --img_size 96
 ```
 
-The script automatically uses CUDA, Apple Silicon MPS, or CPU. Best checkpoint saves to:
+The script automatically uses CUDA when available, otherwise CPU. Apple Silicon MPS is available with `--device mps`, but CPU is the default because PyTorch GRU backward can fail on MPS for this model. Best checkpoint saves to:
 
 ```text
 models/lip_reader.pt
@@ -102,7 +113,7 @@ Training prints:
 ## Live Demo
 
 ```bash
-python lip_reader.py --checkpoint models/lip_reader.pt
+python3 lip_reader.py --checkpoint models/lip_reader.pt
 ```
 
 The demo overlays:

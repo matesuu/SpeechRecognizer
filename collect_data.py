@@ -9,7 +9,6 @@ from collections import deque
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
 
 import cv2
-import mediapipe as mp
 import numpy as np
 
 from utils import (
@@ -18,6 +17,7 @@ from utils import (
     crop_and_resize_mouth,
     ensure_dir,
     extract_mouth_bbox,
+    get_face_mesh_solution,
     next_sample_path,
     open_camera,
     validate_label,
@@ -38,6 +38,10 @@ def main() -> None:
     args = parse_args()
     label = validate_label(args.label)
     label_dir = ensure_dir(f"data/raw/{label}")
+    try:
+        mp_face_mesh = get_face_mesh_solution()
+    except RuntimeError as exc:
+        raise SystemExit(f"Error: {exc}") from None
 
     if not check_camera_permissions(args.camera_id):
         return
@@ -46,7 +50,6 @@ def main() -> None:
     if active_camera_id != args.camera_id:
         print(f"Camera id {args.camera_id} opened but returned no frames. Using camera id {active_camera_id}.")
 
-    mp_face_mesh = mp.solutions.face_mesh
     fps_counter = FPSCounter()
     recording = False
     recorded = 0

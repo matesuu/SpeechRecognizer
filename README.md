@@ -40,7 +40,6 @@ The model treats lip reading as a temporal computer vision task. One mouth image
 ## Setup
 
 ```bash
-cd lip-reading-assistant
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install -r requirements.txt

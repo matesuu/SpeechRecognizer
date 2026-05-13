@@ -13,6 +13,7 @@ import numpy as np
 
 
 VOCABULARY = [
+    "idle",
     "hello",
     "yes",
     "no",

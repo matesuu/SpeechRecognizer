@@ -34,14 +34,35 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--camera_id", type=int, default=0, help="OpenCV camera id.")
     parser.add_argument("--img_size", type=int, default=96, help="Mouth crop size.")
     parser.add_argument("--smooth_window", type=int, default=5, help="Number of predictions to smooth.")
+    parser.add_argument("--debug_dir", default=None, help="Optional directory to save each classified live clip.")
+    parser.add_argument(
+        "--device",
+        choices=["auto", "cpu", "cuda", "mps"],
+        default="auto",
+        help="Inference device. Auto uses CUDA when available, otherwise CPU. MPS is opt-in.",
+    )
+    parser.add_argument(
+        "--continuous",
+        action="store_true",
+        help="Predict from a rolling camera buffer instead of recording one clip per SPACE press.",
+    )
     return parser.parse_args()
 
 
-def get_device() -> torch.device:
+def get_device(preference: str = "auto") -> torch.device:
+    if preference == "cpu":
+        return torch.device("cpu")
+    if preference == "cuda":
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA requested but not available.")
+        return torch.device("cuda")
+    if preference == "mps":
+        if not torch.backends.mps.is_available():
+            raise RuntimeError("MPS requested but not available.")
+        return torch.device("mps")
+
     if torch.cuda.is_available():
         return torch.device("cuda")
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
     return torch.device("cpu")
 
 
@@ -60,7 +81,7 @@ def load_model(checkpoint_path: Path, device: torch.device, img_size: int) -> tu
     return model, frames_per_clip, checkpoint_img_size, vocabulary
 
 
-def predict_clip(model: LipReadingModel, clip_frames: deque[np.ndarray], device: torch.device) -> tuple[int, float]:
+def predict_clip(model: LipReadingModel, clip_frames: deque[np.ndarray], device: torch.device) -> tuple[int, float, list[float]]:
     clip = np.stack(list(clip_frames))
     clip = normalize_clip(clip)
     tensor = torch.from_numpy(clip).unsqueeze(0).to(device)
@@ -68,12 +89,12 @@ def predict_clip(model: LipReadingModel, clip_frames: deque[np.ndarray], device:
         logits = model(tensor)
         probs = torch.softmax(logits, dim=1)[0]
         confidence, class_id = torch.max(probs, dim=0)
-    return int(class_id.item()), float(confidence.item())
+    return int(class_id.item()), float(confidence.item()), [float(prob.item()) for prob in probs.cpu()]
 
 
 def main() -> None:
     args = parse_args()
-    device = get_device()
+    device = get_device(args.device)
     model, checkpoint_frames, checkpoint_img_size, runtime_vocab = load_model(Path(args.checkpoint), device, args.img_size)
 
     if model is None:
@@ -84,6 +105,7 @@ def main() -> None:
         frames_per_clip = checkpoint_frames
         img_size = checkpoint_img_size
         print(f"Loaded model from {args.checkpoint} on {device}")
+        print(f"Vocabulary: {', '.join(runtime_vocab)}")
 
     try:
         mp_face_mesh = get_face_mesh_solution()
@@ -100,6 +122,12 @@ def main() -> None:
     frame_buffer: deque[np.ndarray] = deque(maxlen=frames_per_clip)
     prediction_buffer: deque[tuple[int, float]] = deque(maxlen=args.smooth_window)
     fps_counter = FPSCounter()
+    recording = args.continuous
+    debug_dir = Path(args.debug_dir) if args.debug_dir else None
+    debug_clip_count = 0
+    last_probs: list[float] = []
+    if debug_dir is not None:
+        debug_dir.mkdir(parents=True, exist_ok=True)
 
     with mp_face_mesh.FaceMesh(
         static_image_mode=False,
@@ -130,28 +158,69 @@ def main() -> None:
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
             if mouth_crop is not None:
-                frame_buffer.append(mouth_crop)
-                if model is not None and len(frame_buffer) == frames_per_clip:
-                    prediction_buffer.append(predict_clip(model, frame_buffer, device))
+                if args.continuous or recording:
+                    frame_buffer.append(mouth_crop)
+                    if model is not None and len(frame_buffer) == frames_per_clip:
+                        clip_frames = deque(frame_buffer, maxlen=frames_per_clip)
+                        prediction_buffer.clear()
+                        class_id, confidence, last_probs = predict_clip(model, clip_frames, device)
+                        prediction_buffer.append((class_id, confidence))
+                        if debug_dir is not None:
+                            save_path = debug_dir / f"live_{debug_clip_count:04d}_{runtime_vocab[class_id]}.npy"
+                            np.save(save_path, np.stack(clip_frames))
+                            debug_clip_count += 1
+                            prob_text = ", ".join(
+                                f"{label}={prob:.3f}" for label, prob in zip(runtime_vocab, last_probs)
+                            )
+                            print(f"Saved {save_path} | {prob_text}")
+                        if not args.continuous:
+                            recording = False
+                            frame_buffer.clear()
+            else:
+                frame_buffer.clear()
+                prediction_buffer.clear()
+                last_probs = []
+                if not args.continuous:
+                    recording = False
 
             smoothed_class, smoothed_conf = most_common_prediction(prediction_buffer)
             predicted_word = runtime_vocab[smoothed_class] if smoothed_class is not None else "..."
             fps = fps_counter.update()
+            status = "CONTINUOUS" if args.continuous else ("RECORDING" if recording else "READY")
+            if mouth_crop is None:
+                status = "NO FACE"
 
             cv2.putText(frame, f"Prediction: {predicted_word}", (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (255, 255, 255), 2)
             cv2.putText(frame, f"Confidence: {smoothed_conf:.2f}", (20, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (255, 255, 255), 2)
             cv2.putText(frame, f"FPS: {fps:.1f}", (20, 105), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (255, 255, 255), 2)
             cv2.putText(frame, f"Buffer: {len(frame_buffer)}/{frames_per_clip}", (20, 140), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (255, 255, 255), 2)
+            cv2.putText(frame, f"Status: {status}", (20, 175), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (255, 255, 255), 2)
 
             if mouth_crop is None:
-                cv2.putText(frame, "No face/mouth detected", (20, 180), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (0, 255, 255), 2)
+                cv2.putText(frame, "No face/mouth detected", (20, 210), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (0, 255, 255), 2)
             if model is None:
-                cv2.putText(frame, "Demo mode: train model first", (20, 215), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (0, 255, 255), 2)
+                cv2.putText(frame, "Demo mode: train model first", (20, 245), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (0, 255, 255), 2)
+            elif last_probs:
+                prob_text = " ".join(f"{label}:{prob:.2f}" for label, prob in zip(runtime_vocab, last_probs[:4]))
+                cv2.putText(frame, prob_text, (20, 245), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
 
             cv2.imshow("Real-Time Lip Reading Assistant", frame)
             key = cv2.waitKey(1) & 0xFF
             if key == ord("q"):
                 break
+            if key == 32:
+                frame_buffer.clear()
+                prediction_buffer.clear()
+                last_probs = []
+                recording = False
+                if args.continuous:
+                    continue
+                if model is None:
+                    print("Train a model before recording predictions.")
+                elif mouth_crop is None:
+                    print("No face/mouth detected. Move into frame before recording.")
+                else:
+                    recording = True
 
     cap.release()
     cv2.destroyAllWindows()

@@ -67,6 +67,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=15, help="Training epochs.")
     parser.add_argument("--batch_size", type=int, default=8, help="Batch size.")
     parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate.")
+    parser.add_argument("--label_smoothing", type=float, default=0.1, help="Cross-entropy label smoothing.")
     parser.add_argument("--frames_per_clip", type=int, default=30, help="Frames per clip.")
     parser.add_argument("--img_size", type=int, default=96, help="Mouth crop size.")
     parser.add_argument("--val_split", type=float, default=0.2, help="Validation fraction.")
@@ -169,7 +170,7 @@ def main() -> None:
     print(f"Samples: train={len(train_dataset)}, val={len(val_dataset)}")
 
     model = LipReadingModel(num_classes=len(labels), img_size=args.img_size).to(device)
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(label_smoothing=args.label_smoothing)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     best_val_acc = 0.0

@@ -4,6 +4,7 @@ Accessibility-focused visual speech recognition prototype. It uses webcam video,
 
 ## Vocabulary
 
+- `idle`
 - `hello`
 - `yes`
 - `no`
@@ -67,6 +68,7 @@ On Windows:
 Record fixed-length mouth clips for each word:
 
 ```bash
+python3 collect_data.py --label idle --num_samples 30 --frames_per_clip 30
 python3 collect_data.py --label hello --num_samples 30 --frames_per_clip 30
 python3 collect_data.py --label yes --num_samples 30 --frames_per_clip 30
 python3 collect_data.py --label no --num_samples 30 --frames_per_clip 30
@@ -86,6 +88,7 @@ data/raw/<label>/
 Suggested recording plan:
 
 - Start with 20 to 50 samples per word.
+- For `idle`, face the camera with a neutral mouth and do not speak.
 - Record in the same lighting first.
 - Add different lighting, camera distance, and slight head angles later.
 - Keep clip length consistent between collection, training, and inference.
@@ -123,9 +126,20 @@ The demo overlays:
 - rolling buffer status
 - missing-checkpoint warning
 
-If no checkpoint exists, the app still opens webcam and runs mouth detection demo mode.
+Controls:
 
-Press `Q` to quit.
+- Press `SPACE` to record and classify one word clip.
+- Press `Q` to quit.
+
+For the old rolling-buffer behavior:
+
+```bash
+python3 lip_reader.py --checkpoint models/lip_reader.pt --continuous
+```
+
+The demo uses CPU by default on Apple Silicon. MPS can be tested with `--device mps`, but CPU is preferred for consistency with training.
+
+If no checkpoint exists, the app still opens webcam and runs mouth detection demo mode.
 
 ## Files
 
